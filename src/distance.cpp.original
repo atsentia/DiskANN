@@ -10,11 +10,6 @@
 #include <immintrin.h>
 #endif
 
-// ARM64 NEON support
-#if defined(__aarch64__) || defined(_M_ARM64)
-#include "arm64/distance_neon.h"
-#endif
-
 #include "simd_utils.h"
 #include <cosine_similarity.h>
 #include <iostream>
@@ -26,13 +21,6 @@
 
 namespace diskann
 {
-
-// CPU feature detection flags
-#if defined(__aarch64__) || defined(_M_ARM64)
-bool NeonSupportedCPU = true;  // NEON is mandatory on ARMv8
-#else
-bool NeonSupportedCPU = false;
-#endif
 
 //
 // Base Class Implementatons
@@ -96,10 +84,7 @@ float DistanceCosineInt8::compare(const int8_t *a, const int8_t *b, uint32_t len
 
 float DistanceCosineFloat::compare(const float *a, const float *b, uint32_t length) const
 {
-#if defined(__aarch64__) || defined(_M_ARM64)
-    // ARM64 NEON optimized cosine distance (3.14x speedup)
-    return diskann::neon::cosine_distance_neon(a, b, length);
-#elif defined(_WINDOWS)
+#ifdef _WINDOWS
     return diskann::CosineSimilarity2<float>(a, b, length);
 #else
     float magA = 0, magB = 0, scalarProduct = 0;
@@ -199,10 +184,7 @@ float DistanceL2Float::compare(const float *a, const float *b, uint32_t size) co
 #endif
 
     float result = 0;
-#if defined(__aarch64__) || defined(_M_ARM64)  
-    // ARM64 NEON optimized L2 distance (3.73x speedup)
-    result = diskann::neon::l2_distance_squared_neon(a, b, size);
-#elif defined(USE_AVX2)
+#ifdef USE_AVX2
     // assume size is divisible by 8
     uint16_t niters = (uint16_t)(size / 8);
     __m256 sum = _mm256_setzero_ps();
@@ -327,10 +309,8 @@ template <typename T> float DistanceInnerProduct<T>::inner_product(const T *a, c
 
     float result = 0;
 
-#if defined(__aarch64__) || defined(_M_ARM64)
-    // ARM64 NEON optimized inner product (3.56x speedup)
-    result = diskann::neon::dot_product_neon((const float*)a, (const float*)b, size);
-#elif defined(__GNUC__) && defined(USE_AVX2)
+#ifdef __GNUC__
+#ifdef USE_AVX2
 #define AVX_DOT(addr1, addr2, dest, tmp1, tmp2)                                                                        \
     tmp1 = _mm256_loadu_ps(addr1);                                                                                     \
     tmp2 = _mm256_loadu_ps(addr2);                                                                                     \
@@ -620,13 +600,6 @@ template <> diskann::Distance<float> *get_distance_function(diskann::Metric m)
 {
     if (m == diskann::Metric::L2)
     {
-#if defined(__aarch64__) || defined(_M_ARM64)
-        if (NeonSupportedCPU)
-        {
-            diskann::cout << "L2: Using ARM64 NEON distance computation (3.73x speedup)" << std::endl;
-            return new diskann::DistanceL2Float();
-        }
-#endif
         if (Avx2SupportedCPU)
         {
             diskann::cout << "L2: Using AVX2 distance computation DistanceL2Float" << std::endl;
@@ -645,27 +618,11 @@ template <> diskann::Distance<float> *get_distance_function(diskann::Metric m)
     }
     else if (m == diskann::Metric::COSINE)
     {
-#if defined(__aarch64__) || defined(_M_ARM64)
-        if (NeonSupportedCPU) 
-        {
-            diskann::cout << "Cosine: Using ARM64 NEON implementation (3.14x speedup)" << std::endl;
-        }
-        else
-#endif
-        {
-            diskann::cout << "Cosine: Using either AVX or AVX2 implementation" << std::endl;
-        }
+        diskann::cout << "Cosine: Using either AVX or AVX2 implementation" << std::endl;
         return new diskann::DistanceCosineFloat();
     }
     else if (m == diskann::Metric::INNER_PRODUCT)
     {
-#if defined(__aarch64__) || defined(_M_ARM64)
-        if (NeonSupportedCPU)
-        {
-            diskann::cout << "Inner product: Using ARM64 NEON implementation (3.56x speedup)" << std::endl;
-            return new diskann::AVXDistanceInnerProductFloat();
-        }
-#endif
         diskann::cout << "Inner product: Using AVX2 implementation "
                          "AVXDistanceInnerProductFloat"
                       << std::endl;
