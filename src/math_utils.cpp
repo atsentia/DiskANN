@@ -13,6 +13,7 @@
 #endif
 #include "logger.h"
 #include "utils.h"
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 
 namespace math_utils
 {

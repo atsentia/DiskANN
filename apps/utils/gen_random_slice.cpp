@@ -4,6 +4,7 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 #include <algorithm>
 #include <chrono>
 #include <cmath>

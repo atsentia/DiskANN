@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include "util.h"
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 
 void block_convert(std::ifstream &writr, std::ofstream &readr, float *read_buf, float *write_buf, uint64_t npts,
                    uint64_t ndims)

@@ -8,6 +8,7 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 #include <set>
 #include <string.h>
 #include <boost/program_options.hpp>

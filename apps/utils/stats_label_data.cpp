@@ -11,6 +11,7 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 #include <string.h>
 #include <atomic>
 #include <cstring>

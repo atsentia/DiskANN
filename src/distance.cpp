@@ -23,6 +23,7 @@
 #include "utils.h"
 #include "logger.h"
 #include "ann_exception.h"
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 
 namespace diskann
 {

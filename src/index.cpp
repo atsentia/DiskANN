@@ -5,6 +5,7 @@
 #include <omp.h>
 #endif
 
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 #include <type_traits>
 
 #include "boost/dynamic_bitset.hpp"

@@ -23,6 +23,63 @@ set(CMAKE_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Check for C++17 parallel algorithms support with proper feature detection
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_FLAGS "-std=c++17")
+
+# First check if execution header exists
+check_cxx_source_compiles("
+    #include <execution>
+    int main() { return 0; }
+" HAS_EXECUTION_HEADER)
+
+# Then check if parallel execution policies actually work
+if(HAS_EXECUTION_HEADER)
+    check_cxx_source_compiles("
+        #include <algorithm>
+        #include <execution>
+        #include <vector>
+        #include <numeric>
+        int main() {
+            std::vector<int> v{1,2,3,4,5};
+            // Test parallel for_each
+            std::for_each(std::execution::par, v.begin(), v.end(), [](int& i){ i++; });
+            // Test parallel reduce
+            int sum = std::reduce(std::execution::par, v.begin(), v.end());
+            return sum > 0 ? 0 : 1;
+        }
+    " HAS_WORKING_PARALLEL_STL)
+else()
+    set(HAS_WORKING_PARALLEL_STL FALSE)
+endif()
+
+# Also check for the feature test macro
+check_cxx_source_compiles("
+    #if defined(__cpp_lib_parallel_algorithm) && __cpp_lib_parallel_algorithm >= 201603L
+        int main() { return 0; }
+    #else
+        #error No parallel algorithm support
+    #endif
+" HAS_PARALLEL_ALGORITHM_MACRO)
+
+if(HAS_WORKING_PARALLEL_STL)
+    message(STATUS "C++17 Parallel STL is available and working")
+    add_definitions(-DHAS_WORKING_PARALLEL_STL=1)
+    # Also define the old macro for compatibility
+    add_definitions(-DHAS_PARALLEL_STL=1)
+elseif(HAS_EXECUTION_HEADER)
+    message(STATUS "C++17 <execution> header found but parallel algorithms not working - will use thread pool")
+else()
+    message(STATUS "C++17 Parallel STL is NOT available - will use thread pool or sequential fallback")
+endif()
+
+# Check for Intel TBB as an alternative parallel STL provider
+find_package(TBB QUIET)
+if(TBB_FOUND AND NOT HAS_WORKING_PARALLEL_STL)
+    message(STATUS "Intel TBB found - could be used as Parallel STL provider")
+    # User can enable with -DUSE_TBB_PARALLEL=ON
+endif()
+
 if(NOT MSVC)
 	set(CMAKE_CXX_COMPILER g++)
 endif()

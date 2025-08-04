@@ -14,6 +14,9 @@
 #include <omp.h>
 #endif
 
+// Include our enhanced parallel execution support
+#include "diskann_parallel.h"
+
 namespace diskann
 {
 
@@ -267,22 +270,5 @@ inline bool in_parallel()
 
 } // namespace diskann
 
-// Convenience macros for backward compatibility
-#ifndef _OPENMP
-#define omp_get_num_procs() diskann::get_num_threads()
-#define omp_set_num_threads(n) diskann::set_num_threads(n)
-#define omp_get_thread_num() diskann::get_thread_id()
-#define omp_in_parallel() diskann::in_parallel()
-
-// Pragma omp parallel for replacement macros
-// Usage: Replace "#pragma omp parallel for" with "DISKANN_PARALLEL_FOR(start, end)"
-#define DISKANN_PARALLEL_FOR(start, end) \
-    diskann::parallel_for(start, end, [&](auto _diskann_loop_idx)
-
-#define DISKANN_PARALLEL_FOR_DYNAMIC(start, end, chunk) \
-    diskann::parallel_for_dynamic(start, end, [&](auto _diskann_loop_idx)
-
-// End of parallel for block
-#define DISKANN_END_PARALLEL_FOR );
-
-#endif
+// The OpenMP compatibility macros are now provided by diskann_parallel.h
+// which is included above. This prevents duplicate macro definitions.

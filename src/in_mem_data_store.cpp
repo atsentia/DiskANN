@@ -4,6 +4,7 @@
 #include <memory>
 #include "abstract_scratch.h"
 #include "in_mem_data_store.h"
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 
 #include "utils.h"
 

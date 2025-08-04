@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 #include "utils.h"
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 
 #include <stdio.h>
 

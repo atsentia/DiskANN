@@ -11,6 +11,7 @@
 #include "disk_utils.h"
 #include "cached_io.h"
 #include "index.h"
+#include "diskann_parallel.h"  // Provides OpenMP alternatives when not available
 #ifdef USE_MKL
 #include "mkl.h"
 #endif
