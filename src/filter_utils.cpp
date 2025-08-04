@@ -8,7 +8,9 @@
 #include <string>
 #include <tuple>
 
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include "filter_utils.h"
 #include "index.h"
 #include "parameters.h"

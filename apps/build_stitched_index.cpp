@@ -9,7 +9,9 @@
 #include <string>
 #include <tuple>
 #include "filter_utils.h"
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #ifndef _WINDOWS
 #include <sys/uio.h>
 #endif

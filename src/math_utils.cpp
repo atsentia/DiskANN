@@ -2,9 +2,15 @@
 // Licensed under the MIT license.
 
 #include <limits>
+#ifdef __linux__
 #include <malloc.h>
+#else
+#include <stdlib.h>  // macOS uses stdlib.h instead of malloc.h
+#endif
 #include <math_utils.h>
+#ifndef DISKANN_BUILD_WITHOUT_MKL
 #include <mkl.h>
+#endif
 #include "logger.h"
 #include "utils.h"
 
@@ -29,7 +35,18 @@ void compute_vecs_l2sq(float *vecs_l2sq, float *data, const size_t num_points, c
 #pragma omp parallel for schedule(static, 8192)
     for (int64_t n_iter = 0; n_iter < (int64_t)num_points; n_iter++)
     {
+#ifndef DISKANN_BUILD_WITHOUT_MKL
         vecs_l2sq[n_iter] = cblas_snrm2((MKL_INT)dim, (data + (n_iter * dim)), 1);
+#else
+        // Fallback: compute L2 norm manually
+        float sum = 0.0f;
+        for (size_t d = 0; d < dim; d++)
+        {
+            float val = data[n_iter * dim + d];
+            sum += val * val;
+        }
+        vecs_l2sq[n_iter] = std::sqrt(sum);
+#endif
         vecs_l2sq[n_iter] *= vecs_l2sq[n_iter];
     }
 }
@@ -37,6 +54,7 @@ void compute_vecs_l2sq(float *vecs_l2sq, float *data, const size_t num_points, c
 void rotate_data_randomly(float *data, size_t num_points, size_t dim, float *rot_mat, float *&new_mat,
                           bool transpose_rot)
 {
+#ifndef DISKANN_BUILD_WITHOUT_MKL
     CBLAS_TRANSPOSE transpose = CblasNoTrans;
     if (transpose_rot)
     {
@@ -49,6 +67,26 @@ void rotate_data_randomly(float *data, size_t num_points, size_t dim, float *rot
                 (MKL_INT)dim, rot_mat, (MKL_INT)dim, 0, new_mat, (MKL_INT)dim);
 
     diskann::cout << "done." << std::endl;
+#else
+    // Fallback: naive matrix multiplication without MKL
+    diskann::cout << "Rotating data with standard matrix multiplication (no MKL).." << std::flush;
+    
+    for (size_t i = 0; i < num_points; i++)
+    {
+        for (size_t j = 0; j < dim; j++)
+        {
+            float sum = 0.0f;
+            for (size_t k = 0; k < dim; k++)
+            {
+                float data_val = data[i * dim + k];
+                float rot_val = transpose_rot ? rot_mat[j * dim + k] : rot_mat[k * dim + j];
+                sum += data_val * rot_val;
+            }
+            new_mat[i * dim + j] = sum;
+        }
+    }
+    diskann::cout << "done." << std::endl;
+#endif
 }
 
 // calculate k closest centers to data of num_points * dim (row major)
@@ -84,6 +122,7 @@ void compute_closest_centers_in_block(const float *const data, const size_t num_
         ones_b[i] = 1.0;
     }
 
+#ifndef DISKANN_BUILD_WITHOUT_MKL
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, (MKL_INT)num_points, (MKL_INT)num_centers, (MKL_INT)1, 1.0f,
                 docs_l2sq, (MKL_INT)1, ones_a, (MKL_INT)1, 0.0f, dist_matrix, (MKL_INT)num_centers);
 
@@ -92,6 +131,23 @@ void compute_closest_centers_in_block(const float *const data, const size_t num_
 
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, (MKL_INT)num_points, (MKL_INT)num_centers, (MKL_INT)dim, -2.0f,
                 data, (MKL_INT)dim, centers, (MKL_INT)dim, 1.0f, dist_matrix, (MKL_INT)num_centers);
+#else
+    // Fallback: compute squared distances manually (||a||² + ||b||² - 2⟨a,b⟩)
+    for (size_t i = 0; i < num_points; i++)
+    {
+        for (size_t j = 0; j < num_centers; j++)
+        {
+            float dist = docs_l2sq[i] + centers_l2sq[j];
+            // Compute dot product -2⟨a,b⟩
+            float dot_product = 0.0f;
+            for (size_t d = 0; d < dim; d++)
+            {
+                dot_product += data[i * dim + d] * centers[j * dim + d];
+            }
+            dist_matrix[i * num_centers + j] = dist - 2.0f * dot_product;
+        }
+    }
+#endif
 
     if (k == 1)
     {

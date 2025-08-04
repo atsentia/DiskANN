@@ -14,7 +14,9 @@
 #include <limits>
 #include <cstring>
 #include <queue>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <mkl.h>
 #include <boost/program_options.hpp>
 #include <unordered_map>

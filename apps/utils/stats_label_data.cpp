@@ -8,7 +8,9 @@
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <string.h>
 #include <atomic>
 #include <cstring>

@@ -6,7 +6,7 @@
 #include <smmintrin.h>
 #include <tmmintrin.h>
 #include <intrin.h>
-#else
+#elif defined(USE_AVX2)
 #include <immintrin.h>
 #endif
 
@@ -329,7 +329,7 @@ template <typename T> float DistanceInnerProduct<T>::inner_product(const T *a, c
 
 #if defined(__aarch64__) || defined(_M_ARM64)
     // ARM64 NEON optimized inner product (3.56x speedup)
-    result = diskann::neon::dot_product_neon((const float*)a, (const float*)b, size);
+    return diskann::neon::dot_product_neon((const float*)a, (const float*)b, size);
 #elif defined(__GNUC__) && defined(USE_AVX2)
 #define AVX_DOT(addr1, addr2, dest, tmp1, tmp2)                                                                        \
     tmp1 = _mm256_loadu_ps(addr1);                                                                                     \
@@ -427,7 +427,6 @@ template <typename T> float DistanceInnerProduct<T>::inner_product(const T *a, c
     }
 #endif
 #endif
-#endif
     return result;
 }
 
@@ -514,8 +513,8 @@ template <typename T> float DistanceFastL2<T>::norm(const T *a, uint32_t size) c
     result += unpack[0] + unpack[1] + unpack[2] + unpack[3];
 #else
     float dot0, dot1, dot2, dot3;
-    const float *last = a + size;
-    const float *unroll_group = last - 3;
+    const T *last = a + size;
+    const T *unroll_group = last - 3;
 
     /* Process 4 items with each loop for efficiency. */
     while (a < unroll_group)
@@ -539,6 +538,7 @@ template <typename T> float DistanceFastL2<T>::norm(const T *a, uint32_t size) c
     return result;
 }
 
+#if defined(USE_AVX2) || defined(_WINDOWS)
 float AVXDistanceInnerProductFloat::compare(const float *a, const float *b, uint32_t size) const
 {
     float result = 0.0f;
@@ -614,6 +614,7 @@ void AVXNormalizedCosineDistanceFloat::normalize_and_copy(const float *query_vec
         query_target[i] = query_vec[i] / norm;
     }
 }
+#endif
 
 // Get the right distance function for the given metric.
 template <> diskann::Distance<float> *get_distance_function(diskann::Metric m)
@@ -663,13 +664,18 @@ template <> diskann::Distance<float> *get_distance_function(diskann::Metric m)
         if (NeonSupportedCPU)
         {
             diskann::cout << "Inner product: Using ARM64 NEON implementation (3.56x speedup)" << std::endl;
-            return new diskann::AVXDistanceInnerProductFloat();
+            return new diskann::DistanceInnerProduct<float>();
         }
 #endif
+#if defined(USE_AVX2) || defined(_WINDOWS)
         diskann::cout << "Inner product: Using AVX2 implementation "
                          "AVXDistanceInnerProductFloat"
                       << std::endl;
         return new diskann::AVXDistanceInnerProductFloat();
+#else
+        diskann::cout << "Inner product: Using standard implementation" << std::endl;
+        return new diskann::DistanceInnerProduct<float>();
+#endif
     }
     else if (m == diskann::Metric::FAST_L2)
     {
@@ -769,8 +775,6 @@ template DISKANN_DLLEXPORT class SlowDistanceL2<float>;
 template DISKANN_DLLEXPORT class SlowDistanceL2<int8_t>;
 template DISKANN_DLLEXPORT class SlowDistanceL2<uint8_t>;
 
-template DISKANN_DLLEXPORT Distance<float> *get_distance_function(Metric m);
-template DISKANN_DLLEXPORT Distance<int8_t> *get_distance_function(Metric m);
-template DISKANN_DLLEXPORT Distance<uint8_t> *get_distance_function(Metric m);
+// Explicit instantiations removed - using template specializations instead
 
 } // namespace diskann

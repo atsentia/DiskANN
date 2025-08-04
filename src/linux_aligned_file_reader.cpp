@@ -15,8 +15,9 @@ namespace
 typedef struct io_event io_event_t;
 typedef struct iocb iocb_t;
 
-void execute_io(io_context_t ctx, int fd, std::vector<AlignedRead> &read_reqs, uint64_t n_retries = 0)
+void execute_io(IOContext ctx, int fd, std::vector<AlignedRead> &read_reqs, uint64_t n_retries = 0)
 {
+#ifdef __linux__
 #ifdef DEBUG
     for (auto &req : read_reqs)
     {
@@ -116,15 +117,31 @@ LinuxAlignedFileReader::~LinuxAlignedFileReader()
             }
         }
     }
+#else
+    // macOS fallback - use simple synchronous I/O
+    for (auto &req : read_reqs)
+    {
+        if (::lseek(fd, req.offset, SEEK_SET) == -1)
+        {
+            std::cerr << "lseek() failed; returned -1, errno=" << errno << ":" << ::strerror(errno) << std::endl;
+            continue;
+        }
+        if (::read(fd, req.buf, req.len) != (ssize_t)req.len)
+        {
+            std::cerr << "read() failed to read full length, errno=" << errno << ":" << ::strerror(errno) << std::endl;
+        }
+    }
+#endif
 }
+} // end anonymous namespace
 
-io_context_t &LinuxAlignedFileReader::get_ctx()
+IOContext &LinuxAlignedFileReader::get_ctx()
 {
     std::unique_lock<std::mutex> lk(ctx_mut);
     // perform checks only in DEBUG mode
     if (ctx_map.find(std::this_thread::get_id()) == ctx_map.end())
     {
-        std::cerr << "bad thread access; returning -1 as io_context_t" << std::endl;
+        std::cerr << "bad thread access; returning -1 as IOContext" << std::endl;
         return this->bad_ctx;
     }
     else
@@ -142,7 +159,8 @@ void LinuxAlignedFileReader::register_thread()
         std::cerr << "multiple calls to register_thread from the same thread" << std::endl;
         return;
     }
-    io_context_t ctx = 0;
+    IOContext ctx = 0;
+#ifdef __linux__
     int ret = io_setup(MAX_EVENTS, &ctx);
     if (ret != 0)
     {
@@ -161,6 +179,10 @@ void LinuxAlignedFileReader::register_thread()
         diskann::cout << "allocating ctx: " << ctx << " to thread-id:" << my_id << std::endl;
         ctx_map[my_id] = ctx;
     }
+#else
+    // macOS fallback - just store a dummy context
+    ctx_map[my_id] = ctx;
+#endif
     lk.unlock();
 }
 
@@ -171,9 +193,11 @@ void LinuxAlignedFileReader::deregister_thread()
     assert(ctx_map.find(my_id) != ctx_map.end());
 
     lk.unlock();
-    io_context_t ctx = this->get_ctx();
+    IOContext ctx = this->get_ctx();
+#ifdef __linux__
     io_destroy(ctx);
     //  assert(ret == 0);
+#endif
     lk.lock();
     ctx_map.erase(my_id);
     std::cerr << "returned ctx from thread-id:" << my_id << std::endl;
@@ -185,9 +209,11 @@ void LinuxAlignedFileReader::deregister_all_threads()
     std::unique_lock<std::mutex> lk(ctx_mut);
     for (auto x = ctx_map.begin(); x != ctx_map.end(); x++)
     {
-        io_context_t ctx = x.value();
+        IOContext ctx = x.value();
+#ifdef __linux__
         io_destroy(ctx);
         //  assert(ret == 0);
+#endif
         //  lk.lock();
         //  ctx_map.erase(my_id);
         //  std::cerr << "returned ctx from thread-id:" << my_id << std::endl;
@@ -198,7 +224,11 @@ void LinuxAlignedFileReader::deregister_all_threads()
 
 void LinuxAlignedFileReader::open(const std::string &fname)
 {
+#ifdef __linux__
     int flags = O_DIRECT | O_RDONLY | O_LARGEFILE;
+#else
+    int flags = O_RDONLY;  // macOS doesn't support O_DIRECT or O_LARGEFILE
+#endif
     this->file_desc = ::open(fname.c_str(), flags);
     // error checks
     assert(this->file_desc != -1);
@@ -217,7 +247,7 @@ void LinuxAlignedFileReader::close()
     //  assert(ret != -1);
 }
 
-void LinuxAlignedFileReader::read(std::vector<AlignedRead> &read_reqs, io_context_t &ctx, bool async)
+void LinuxAlignedFileReader::read(std::vector<AlignedRead> &read_reqs, IOContext &ctx, bool async)
 {
     if (async == true)
     {

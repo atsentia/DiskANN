@@ -1,7 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <algorithm>
 #include <chrono>
 #include <cmath>

@@ -5,7 +5,9 @@
 #include <iomanip>
 #include <algorithm>
 #include <numeric>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <set>
 #include <string.h>
 #include <boost/program_options.hpp>
@@ -158,7 +160,9 @@ int search_memory_index(diskann::Metric &metric, const std::string &index_path, 
         std::vector<T *> res = std::vector<T *>();
 
         auto s = std::chrono::high_resolution_clock::now();
+#ifdef _OPENMP
         omp_set_num_threads(num_threads);
+#endif
 #pragma omp parallel for schedule(dynamic, 1)
         for (int64_t i = 0; i < (int64_t)query_num; i++)
         {
@@ -321,7 +325,11 @@ int main(int argc, char **argv)
         optional_configs.add_options()("gt_file", po::value<std::string>(&gt_file)->default_value(std::string("null")),
                                        program_options_utils::GROUND_TRUTH_FILE_DESCRIPTION);
         optional_configs.add_options()("num_threads,T",
+#ifdef _OPENMP
                                        po::value<uint32_t>(&num_threads)->default_value(omp_get_num_procs()),
+#else
+                                       po::value<uint32_t>(&num_threads)->default_value(1),
+#endif
                                        program_options_utils::NUMBER_THREADS_DESCRIPTION);
         optional_configs.add_options()(
             "dynamic", po::value<bool>(&dynamic)->default_value(false),

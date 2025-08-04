@@ -5,7 +5,9 @@
 #include <iomanip>
 #include <algorithm>
 #include <numeric>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <set>
 #include <string.h>
 #include <boost/program_options.hpp>

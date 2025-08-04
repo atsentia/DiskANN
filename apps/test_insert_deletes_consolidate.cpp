@@ -3,7 +3,9 @@
 
 #include <index.h>
 #include <numeric>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <string.h>
 #include <time.h>
 #include <timer.h>

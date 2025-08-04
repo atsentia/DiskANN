@@ -5,12 +5,13 @@
 #include <smmintrin.h>
 #include <tmmintrin.h>
 #include <intrin.h>
-#else
+#elif defined(USE_AVX2)
 #include <immintrin.h>
 #endif
 
 namespace diskann
 {
+#if defined(USE_AVX2) || defined(_WINDOWS)
 static inline __m256 _mm256_mul_epi8(__m256i X)
 {
     __m256i zero = _mm256_setzero_si256();
@@ -103,4 +104,5 @@ static inline float _mm256_reduce_add_ps(__m256 x)
     /* Conversion to float is a no-op on x86-64 */
     return _mm_cvtss_f32(x32);
 }
+#endif // defined(USE_AVX2) || defined(_WINDOWS)
 } // namespace diskann

@@ -10,9 +10,14 @@
 
 #ifndef _WINDOWS
 #include <fcntl.h>
-#include <libaio.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <libaio.h>
 typedef io_context_t IOContext;
+#else
+// macOS/BSD doesn't have libaio, use simple file I/O
+typedef int IOContext;
+#endif
 #else
 #include <Windows.h>
 #include <minwinbase.h>
@@ -63,7 +68,11 @@ struct IOContext
 
 #endif
 
+#ifdef __linux__
 #include <malloc.h>
+#else
+#include <stdlib.h>  // macOS uses stdlib.h instead of malloc.h
+#endif
 #include <cstdio>
 #include <mutex>
 #include <thread>

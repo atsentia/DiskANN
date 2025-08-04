@@ -7,7 +7,9 @@
 #include <sstream>
 #include <string>
 
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include "tsl/robin_map.h"
 #include "tsl/robin_set.h"
 
@@ -427,7 +429,7 @@ int retrieve_shard_data_from_ids(const std::string data_file, std::string idmap_
     shard_data_writer.write((char *)&basedim32, sizeof(uint32_t));
 
     uint32_t *shard_ids;
-    uint64_t shard_size, tmp;
+    size_t shard_size, tmp;
     diskann::load_bin<uint32_t>(idmap_filename, shard_ids, shard_size, tmp);
 
     uint32_t cur_pos = 0;

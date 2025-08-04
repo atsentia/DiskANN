@@ -287,7 +287,7 @@ void PQFlashIndex<T, LabelT>::generate_cache_list_from_sample_queries(std::strin
         this->_node_visit_counter[i].second = 0;
     }
 
-    uint64_t sample_num, sample_dim, sample_aligned_dim;
+    size_t sample_num, sample_dim, sample_aligned_dim;
     T *samples;
 
 #ifdef EXEC_ENV_OLS
@@ -335,7 +335,7 @@ void PQFlashIndex<T, LabelT>::generate_cache_list_from_sample_queries(std::strin
               });
     node_list.clear();
     node_list.shrink_to_fit();
-    num_nodes_to_cache = std::min(num_nodes_to_cache, this->_node_visit_counter.size());
+    num_nodes_to_cache = std::min(num_nodes_to_cache, (uint64_t)this->_node_visit_counter.size());
     node_list.reserve(num_nodes_to_cache);
     for (uint64_t i = 0; i < num_nodes_to_cache; i++)
     {
@@ -424,7 +424,7 @@ void PQFlashIndex<T, LabelT>::cache_bfs_levels(uint64_t num_nodes_to_cache, std:
         {
             diskann::cout << "." << std::flush;
             size_t start = block * BLOCK_SIZE;
-            size_t end = (std::min)((block + 1) * BLOCK_SIZE, nodes_to_expand.size());
+            size_t end = (std::min)((size_t)((block + 1) * BLOCK_SIZE), nodes_to_expand.size());
 
             std::vector<uint32_t> nodes_to_read;
             std::vector<T *> coord_buffers(end - start, nullptr);
@@ -1178,7 +1178,7 @@ int PQFlashIndex<T, LabelT>::load_from_separate_paths(uint32_t num_threads, cons
 #else
     if (file_exists(norm_file) && metric == diskann::Metric::INNER_PRODUCT)
     {
-        uint64_t dumr, dumc;
+        size_t dumr, dumc;
         float *norm_val;
         diskann::load_bin<float>(norm_file, norm_val, dumr, dumc);
 #endif
@@ -1326,7 +1326,13 @@ void PQFlashIndex<T, LabelT>::cached_beam_search(const T *query1, const uint64_t
 
     // pointers to buffers for data
     T *data_buf = query_scratch->coord_scratch;
+#if defined(__aarch64__) || defined(_M_ARM64)
+    __builtin_prefetch((char *)data_buf, 0, 2);  // ARM64 prefetch with medium locality
+#elif defined(USE_AVX2)
     _mm_prefetch((char *)data_buf, _MM_HINT_T1);
+#else
+    __builtin_prefetch((char *)data_buf, 0, 2);  // GCC/Clang builtin
+#endif
 
     // sector scratch
     char *sector_scratch = query_scratch->sector_scratch;

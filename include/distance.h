@@ -105,7 +105,7 @@ class DistanceCosineFloat : public Distance<float>
     DistanceCosineFloat() : Distance<float>(diskann::Metric::COSINE)
     {
     }
-    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const;
+    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const override;
 };
 
 class DistanceL2Float : public Distance<float>
@@ -128,7 +128,7 @@ class AVXDistanceL2Float : public Distance<float>
     AVXDistanceL2Float() : Distance<float>(diskann::Metric::L2)
     {
     }
-    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const;
+    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const override;
 };
 
 template <typename T> class SlowDistanceL2 : public Distance<T>
@@ -192,15 +192,18 @@ template <typename T> class DistanceFastL2 : public DistanceInnerProduct<T>
     float compare(const T *a, const T *b, float norm, unsigned size) const;
 };
 
+#if defined(USE_AVX2) || defined(_WINDOWS)
 class AVXDistanceInnerProductFloat : public Distance<float>
 {
   public:
     AVXDistanceInnerProductFloat() : Distance<float>(diskann::Metric::INNER_PRODUCT)
     {
     }
-    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const;
+    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const override;
 };
+#endif
 
+#if defined(USE_AVX2) || defined(_WINDOWS)
 class AVXNormalizedCosineDistanceFloat : public Distance<float>
 {
   private:
@@ -213,7 +216,7 @@ class AVXNormalizedCosineDistanceFloat : public Distance<float>
     AVXNormalizedCosineDistanceFloat() : Distance<float>(diskann::Metric::COSINE)
     {
     }
-    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const
+    DISKANN_DLLEXPORT virtual float compare(const float *a, const float *b, uint32_t length) const override
     {
         // Inner product returns negative values to indicate distance.
         // This will ensure that cosine is between -1 and 1.
@@ -229,6 +232,7 @@ class AVXNormalizedCosineDistanceFloat : public Distance<float>
     DISKANN_DLLEXPORT virtual void preprocess_query(const float *query_vec, const size_t query_dim,
                                                     float *scratch_query_vector) override;
 };
+#endif
 
 template <typename T> Distance<T> *get_distance_function(Metric m);
 

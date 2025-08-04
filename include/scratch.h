@@ -144,9 +144,9 @@ template <typename T> class SSDQueryScratch : public AbstractScratch<T>
     T *coord_scratch = nullptr; // MUST BE AT LEAST [sizeof(T) * data_dim]
 
     char *sector_scratch = nullptr; // MUST BE AT LEAST [MAX_N_SECTOR_READS * SECTOR_LEN]
-    size_t sector_idx = 0;          // index of next [SECTOR_LEN] scratch to use
+    uint64_t sector_idx = 0;        // index of next [SECTOR_LEN] scratch to use
 
-    tsl::robin_set<size_t> visited;
+    tsl::robin_set<uint64_t> visited;
     NeighborPriorityQueue retset;
     std::vector<Neighbor> full_retset;
 

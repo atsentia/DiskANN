@@ -130,11 +130,14 @@ inline void open_file_to_write(std::ofstream &writer, const std::string &filenam
     {
         char buff[1024];
 #ifdef _WINDOWS
-        auto ret = std::to_string(strerror_s(buff, 1024, errno));
+        strerror_s(buff, 1024, errno);
+        auto ret = std::string("0");
 #else
-        auto ret = std::string(strerror_r(errno, buff, 1024));
+        // strerror_r has different signatures on different systems
+        strerror_r(errno, buff, 1024);
+        auto ret = std::string("0");
 #endif
-        auto message = std::string("Failed to open file") + filename + " for write because " + buff + ", ret=" + ret;
+        auto message = std::string("Failed to open file ") + filename + " for write because " + buff + ", ret=" + ret;
         diskann::cerr << message << std::endl;
         throw diskann::ANNException(message, -1);
     }
@@ -704,9 +707,12 @@ inline void open_file_to_write(std::ofstream &writer, const std::string &filenam
     {
         char buff[1024];
 #ifdef _WINDOWS
-        auto ret = std::to_string(strerror_s(buff, 1024, errno));
+        strerror_s(buff, 1024, errno);
+        auto ret = std::string("0");
 #else
-        auto ret = std::string(strerror_r(errno, buff, 1024));
+        // strerror_r has different signatures on different systems
+        strerror_r(errno, buff, 1024);
+        auto ret = std::string("0");
 #endif
         std::string error_message =
             std::string("Failed to open file") + filename + " for write because " + buff + ", ret=" + ret;
@@ -991,16 +997,30 @@ inline void copy_aligned_data_from_file(const char *bin_file, T *&data, size_t &
 inline void prefetch_vector(const char *vec, size_t vecsize)
 {
     size_t max_prefetch_size = (vecsize / 64) * 64;
-    for (size_t d = 0; d < max_prefetch_size; d += 64)
+    for (size_t d = 0; d < max_prefetch_size; d += 64) {
+#if defined(__aarch64__) || defined(_M_ARM64)
+        __builtin_prefetch((const char *)vec + d, 0, 3);  // ARM64 prefetch for read, high locality
+#elif defined(USE_AVX2)
         _mm_prefetch((const char *)vec + d, _MM_HINT_T0);
+#else
+        __builtin_prefetch((const char *)vec + d, 0, 3);  // GCC/Clang builtin prefetch
+#endif
+    }
 }
 
 // NOTE :: good efficiency when total_vec_size is integral multiple of 64
 inline void prefetch_vector_l2(const char *vec, size_t vecsize)
 {
     size_t max_prefetch_size = (vecsize / 64) * 64;
-    for (size_t d = 0; d < max_prefetch_size; d += 64)
+    for (size_t d = 0; d < max_prefetch_size; d += 64) {
+#if defined(__aarch64__) || defined(_M_ARM64)
+        __builtin_prefetch((const char *)vec + d, 0, 2);  // ARM64 prefetch for read, moderate locality
+#elif defined(USE_AVX2)
         _mm_prefetch((const char *)vec + d, _MM_HINT_T1);
+#else
+        __builtin_prefetch((const char *)vec + d, 0, 2);  // GCC/Clang builtin prefetch
+#endif
+    }
 }
 
 // NOTE: Implementation in utils.cpp.

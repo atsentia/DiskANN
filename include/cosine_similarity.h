@@ -3,9 +3,15 @@
 
 #pragma once
 
+#ifdef _WINDOWS
 #include <immintrin.h>
 #include <smmintrin.h>
 #include <tmmintrin.h>
+#elif defined(USE_AVX2)
+#include <immintrin.h>
+#include <smmintrin.h>
+#include <tmmintrin.h>
+#endif
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
