@@ -1,7 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 
 #include <type_traits>
 
@@ -1287,7 +1289,12 @@ template <typename T, typename TagT, typename LabelT> void Index<T, TagT, LabelT
 {
     uint32_t num_threads = _indexingThreads;
     if (num_threads != 0)
+#ifdef _OPENMP
         omp_set_num_threads(num_threads);
+#else
+        // OpenMP not available - using std::thread threading
+        (void)num_threads; // Suppress unused variable warning
+#endif
 
     /* visit_order is a vector that is initialized to the entire graph */
     std::vector<uint32_t> visit_order;
@@ -2437,7 +2444,13 @@ consolidation_report Index<T, TagT, LabelT>::consolidate_deletes(const IndexWrit
     const uint32_t range = params.max_degree;
     const uint32_t maxc = params.max_occlusion_size;
     const float alpha = params.alpha;
-    const uint32_t num_threads = params.num_threads == 0 ? omp_get_num_procs() : params.num_threads;
+    const uint32_t num_threads = params.num_threads == 0 ? 
+#ifdef _OPENMP
+        omp_get_num_procs() : 
+#else
+        std::thread::hardware_concurrency() :
+#endif
+        params.num_threads;
 
     uint32_t num_calls_to_process_delete = 0;
     diskann::Timer timer;
@@ -3285,7 +3298,13 @@ void Index<T, TagT, LabelT>::search_with_optimized_layout(const T *query, size_t
         uint32_t id = init_ids[i];
         if (id >= _nd)
             continue;
+#if defined(__aarch64__) || defined(_M_ARM64)
+        __builtin_prefetch(_opt_graph + _node_size * id, 0, 3);  // ARM64 prefetch
+#elif defined(USE_AVX2)
         _mm_prefetch(_opt_graph + _node_size * id, _MM_HINT_T0);
+#else
+        __builtin_prefetch(_opt_graph + _node_size * id, 0, 3);  // GCC/Clang builtin
+#endif
     }
     L = 0;
     for (uint32_t i = 0; i < init_ids.size(); i++)
@@ -3306,12 +3325,24 @@ void Index<T, TagT, LabelT>::search_with_optimized_layout(const T *query, size_t
     {
         auto nbr = retset.closest_unexpanded();
         auto n = nbr.id;
+#if defined(__aarch64__) || defined(_M_ARM64)
+        __builtin_prefetch(_opt_graph + _node_size * n + _data_len, 0, 3);  // ARM64 prefetch
+#elif defined(USE_AVX2)
         _mm_prefetch(_opt_graph + _node_size * n + _data_len, _MM_HINT_T0);
+#else
+        __builtin_prefetch(_opt_graph + _node_size * n + _data_len, 0, 3);  // GCC/Clang builtin
+#endif
         neighbors = (uint32_t *)(_opt_graph + _node_size * n + _data_len);
         uint32_t MaxM = *neighbors;
         neighbors++;
         for (uint32_t m = 0; m < MaxM; ++m)
+#if defined(__aarch64__) || defined(_M_ARM64)
+            __builtin_prefetch(_opt_graph + _node_size * neighbors[m], 0, 3);  // ARM64 prefetch
+#elif defined(USE_AVX2)
             _mm_prefetch(_opt_graph + _node_size * neighbors[m], _MM_HINT_T0);
+#else
+            __builtin_prefetch(_opt_graph + _node_size * neighbors[m], 0, 3);  // GCC/Clang builtin
+#endif
         for (uint32_t m = 0; m < MaxM; ++m)
         {
             uint32_t id = neighbors[m];

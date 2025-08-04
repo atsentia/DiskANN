@@ -85,8 +85,9 @@ else()
     if (OPENMP_FOUND)
         set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+        message(STATUS "OpenMP support enabled")
     else()
-        message(FATAL_ERROR "No OpenMP support")
+        message(WARNING "No OpenMP support - building without OpenMP (performance may be reduced)")
     endif()
 endif()
 
@@ -153,9 +154,10 @@ else()
     endforeach()
 
     if(NOT OMP_PATH)
-        message(FATAL_ERROR "Could not find Intel OMP in standard locations; use -DOMP_PATH to specify the install location for your environment")
+        message(WARNING "Could not find Intel OMP in standard locations - building without Intel OMP optimizations")
+    else()
+        link_directories(${OMP_PATH})
     endif()
-    link_directories(${OMP_PATH})
 
     set(POSSIBLE_MKL_LIB_PATHS "/opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_core.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/opt/intel/mkl/lib/intel64/libmkl_core.so")
     foreach(POSSIBLE_MKL_LIB_PATH ${POSSIBLE_MKL_LIB_PATHS})
@@ -171,40 +173,63 @@ else()
         endif()
     endforeach()
     if(NOT MKL_PATH)
-        message(FATAL_ERROR "Could not find Intel MKL in standard locations; use -DMKL_PATH to specify the install location for your environment")
+        message(WARNING "Could not find Intel MKL in standard locations - building without Intel MKL optimizations (consider using native ARM64 math libraries)")
+        set(DISKANN_BUILD_WITHOUT_MKL ON)
     elseif(NOT MKL_INCLUDE_PATH)
-        message(FATAL_ERROR "Could not find Intel MKL in standard locations; use -DMKL_INCLUDE_PATH to specify the install location for headers for your environment")
+        message(WARNING "Could not find Intel MKL headers - building without Intel MKL optimizations") 
+        set(DISKANN_BUILD_WITHOUT_MKL ON)
     endif()
-    if (EXISTS ${MKL_PATH}/libmkl_def.so.2)
-        set(MKL_DEF_SO ${MKL_PATH}/libmkl_def.so.2)
-    elseif(EXISTS ${MKL_PATH}/libmkl_def.so)
-        set(MKL_DEF_SO ${MKL_PATH}/libmkl_def.so)
-    else()
-        message(FATAL_ERROR "Despite finding MKL, libmkl_def.so was not found in expected locations.")
+    
+    # Only configure MKL if we found it
+    if(NOT DISKANN_BUILD_WITHOUT_MKL)
+        if (EXISTS ${MKL_PATH}/libmkl_def.so.2)
+            set(MKL_DEF_SO ${MKL_PATH}/libmkl_def.so.2)
+        elseif(EXISTS ${MKL_PATH}/libmkl_def.so)
+            set(MKL_DEF_SO ${MKL_PATH}/libmkl_def.so)
+        else()
+            message(WARNING "Despite finding MKL path, libmkl_def.so was not found - building without MKL")
+            set(DISKANN_BUILD_WITHOUT_MKL ON)
+        endif()
+        
+        if(NOT DISKANN_BUILD_WITHOUT_MKL)
+            link_directories(${MKL_PATH})
+            include_directories(${MKL_INCLUDE_PATH})
+        endif()
     endif()
-    link_directories(${MKL_PATH})
-    include_directories(${MKL_INCLUDE_PATH})
 
-    # compile flags and link libraries
-    add_compile_options(-m64 -Wl,--no-as-needed)
-    if (NOT PYBIND)
-        link_libraries(mkl_intel_ilp64 mkl_intel_thread mkl_core iomp5 pthread m dl)
+    # compile flags and link libraries  
+    if(APPLE)
+        add_compile_options(-m64)  # Apple doesn't need --no-as-needed
     else()
-        # static linking for python so as to minimize customer dependency issues
-        link_libraries(
-                ${MKL_PATH}/libmkl_intel_ilp64.a
-                ${MKL_PATH}/libmkl_intel_thread.a
-                ${MKL_PATH}/libmkl_core.a
-                ${MKL_DEF_SO}
-                iomp5
-                pthread
-                m
-                dl
-        )
+        add_compile_options(-m64 -Wl,--no-as-needed)  # Linux linker flag
+    endif()
+    
+    # Only link MKL if we have it
+    if(NOT DISKANN_BUILD_WITHOUT_MKL)
+        if (NOT PYBIND)
+            link_libraries(mkl_intel_ilp64 mkl_intel_thread mkl_core iomp5 pthread m dl)
+        else()
+            # static linking for python so as to minimize customer dependency issues
+            link_libraries(
+                    ${MKL_PATH}/libmkl_intel_ilp64.a
+                    ${MKL_PATH}/libmkl_intel_thread.a
+                    ${MKL_PATH}/libmkl_core.a
+                    ${MKL_DEF_SO}
+                    iomp5
+                    pthread
+                    m
+                    dl
+            )
+        endif()
+        add_definitions(-DMKL_ILP64)
+        message(STATUS "Building with Intel MKL support")
+    else()
+        # Basic math libraries for non-MKL build
+        link_libraries(pthread m dl)
+        add_definitions(-DDISKANN_BUILD_WITHOUT_MKL)
+        message(STATUS "Building without MKL - using standard math libraries")
     endif()
 endif()
-
-add_definitions(-DMKL_ILP64)
 
 # Section for tcmalloc. The DiskANN tools are always linked to tcmalloc. For Windows, they also need to
 # force-include the _tcmalloc symbol for enabling tcmalloc.
@@ -286,10 +311,28 @@ if(MSVC)
 	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${PROJECT_SOURCE_DIR}/x64/Release)
 else()
     set(ENV{TCMALLOC_LARGE_ALLOC_REPORT_THRESHOLD} 500000000000)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mfma -msse2 -ftree-vectorize -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -fopenmp -fopenmp-simd -funroll-loops -Wfatal-errors -DUSE_AVX2")
+    
+    # Platform and architecture detection for SIMD optimizations
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)")
+        set(DISKANN_TARGET_ARCH "arm64")
+        message(STATUS "DiskANN: Detected ARM64 architecture, enabling NEON optimizations")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a+simd -ftree-vectorize -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -funroll-loops -Wno-inconsistent-missing-override -DDISKANN_ARM64_NEON")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|i386|i686)")
+        set(DISKANN_TARGET_ARCH "x86_64")
+        message(STATUS "DiskANN: Detected x86_64 architecture, enabling AVX2 optimizations")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mfma -msse2 -ftree-vectorize -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -funroll-loops -Wfatal-errors -DUSE_AVX2")
+    else()
+        set(DISKANN_TARGET_ARCH "generic")
+        message(WARNING "DiskANN: Unknown architecture ${CMAKE_SYSTEM_PROCESSOR}, using generic build")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftree-vectorize -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -funroll-loops -Wfatal-errors")
+    endif()
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG")
     if (NOT PYBIND)
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -Ofast")
+        if(APPLE)
+            set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O3")  # Apple Clang doesn't like -Ofast
+        else()
+            set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -Ofast")
+        endif()
         if (NOT PORTABLE)
             set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -mtune=native")
         endif()
