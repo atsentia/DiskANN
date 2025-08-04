@@ -16,9 +16,6 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 #include <queue>
 #include <random>
 #include <set>
@@ -27,3 +24,4 @@
 #include <sstream>
 #include <unordered_map>
 #include <vector>
+

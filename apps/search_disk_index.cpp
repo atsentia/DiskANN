@@ -3,6 +3,7 @@
 
 #include "common_includes.h"
 #include <boost/program_options.hpp>
+#include "parallel_utils.h"
 
 #include "index.h"
 #include "disk_utils.h"
@@ -129,9 +130,7 @@ int search_disk_index(diskann::Metric &metric, const std::string &index_path_pre
     node_list.clear();
     node_list.shrink_to_fit();
 
-#ifdef _OPENMP
-    omp_set_num_threads(num_threads);
-#endif
+    diskann::set_num_threads(num_threads);
 
     uint64_t warmup_L = 20;
     uint64_t warmup_num = 0, warmup_dim = 0, warmup_aligned_dim = 0;
@@ -361,11 +360,7 @@ int main(int argc, char **argv)
             po::value<uint32_t>(&search_io_limit)->default_value(std::numeric_limits<uint32_t>::max()),
             "Max #IOs for search.  Default value: uint32::max()");
         optional_configs.add_options()("num_threads,T",
-#ifdef _OPENMP
-                                       po::value<uint32_t>(&num_threads)->default_value(omp_get_num_procs()),
-#else
-                                       po::value<uint32_t>(&num_threads)->default_value(1),
-#endif
+                                       po::value<uint32_t>(&num_threads)->default_value(diskann::get_num_threads()),
                                        program_options_utils::NUMBER_THREADS_DESCRIPTION);
         optional_configs.add_options()("use_reorder_data", po::bool_switch()->default_value(false),
                                        "Include full precision data in the index. Use only in "

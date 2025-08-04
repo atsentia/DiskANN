@@ -4,11 +4,9 @@
 #include <atomic>
 #include <cstring>
 #include <iomanip>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 #include <set>
 #include <boost/program_options.hpp>
+#include "parallel_utils.h"
 
 #include "index.h"
 #include "disk_utils.h"
@@ -301,11 +299,7 @@ int main(int argc, char **argv)
         // Optional parameters
         po::options_description optional_configs("Optional");
         optional_configs.add_options()("num_threads,T",
-#ifdef _OPENMP
-                                       po::value<uint32_t>(&num_threads)->default_value(omp_get_num_procs()),
-#else
-                                       po::value<uint32_t>(&num_threads)->default_value(1),
-#endif
+                                       po::value<uint32_t>(&num_threads)->default_value(diskann::get_num_threads()),
                                        program_options_utils::NUMBER_THREADS_DESCRIPTION);
         optional_configs.add_options()("gt_file", po::value<std::string>(&gt_file)->default_value(std::string("null")),
                                        program_options_utils::GROUND_TRUTH_FILE_DESCRIPTION);

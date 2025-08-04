@@ -35,6 +35,13 @@ typedef int FileHandle;
 #include "memory_mapped_files.h"
 #endif
 
+// Thread count detection utilities
+#ifdef _OPENMP
+#include <omp.h>
+#else
+#include <thread>
+#endif
+
 // taken from
 // https://github.com/Microsoft/BLAS-on-flash/blob/master/include/utils.h
 // round up X to the nearest multiple of Y
@@ -235,6 +242,9 @@ class AlignedFileReader;
 namespace diskann
 {
 static const size_t MAX_SIZE_OF_STREAMBUF = 2LL * 1024 * 1024 * 1024;
+
+// Include parallel utilities instead of duplicating
+// This provides cross-platform parallel execution support
 
 inline void print_error_and_terminate(std::stringstream &error_stream)
 {

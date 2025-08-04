@@ -5,12 +5,10 @@
 #include <iomanip>
 #include <algorithm>
 #include <numeric>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 #include <set>
 #include <string.h>
 #include <boost/program_options.hpp>
+#include "parallel_utils.h"
 
 #ifndef _WINDOWS
 #include <sys/mman.h>
@@ -160,11 +158,9 @@ int search_memory_index(diskann::Metric &metric, const std::string &index_path, 
         std::vector<T *> res = std::vector<T *>();
 
         auto s = std::chrono::high_resolution_clock::now();
-#ifdef _OPENMP
-        omp_set_num_threads(num_threads);
-#endif
-#pragma omp parallel for schedule(dynamic, 1)
-        for (int64_t i = 0; i < (int64_t)query_num; i++)
+        diskann::set_num_threads(num_threads);
+        
+        diskann::parallel_for_dynamic<int64_t>(0, (int64_t)query_num, [&](int64_t i)
         {
             auto qs = std::chrono::high_resolution_clock::now();
             if (filtered_search && !tags)
@@ -211,7 +207,7 @@ int search_memory_index(diskann::Metric &metric, const std::string &index_path, 
             auto qe = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> diff = qe - qs;
             latency_stats[i] = (float)(diff.count() * 1000000);
-        }
+        }, 1, num_threads); // chunk_size=1 for dynamic scheduling
         std::chrono::duration<double> diff = std::chrono::high_resolution_clock::now() - s;
 
         double displayed_qps = query_num / diff.count();
@@ -325,11 +321,7 @@ int main(int argc, char **argv)
         optional_configs.add_options()("gt_file", po::value<std::string>(&gt_file)->default_value(std::string("null")),
                                        program_options_utils::GROUND_TRUTH_FILE_DESCRIPTION);
         optional_configs.add_options()("num_threads,T",
-#ifdef _OPENMP
-                                       po::value<uint32_t>(&num_threads)->default_value(omp_get_num_procs()),
-#else
-                                       po::value<uint32_t>(&num_threads)->default_value(1),
-#endif
+                                       po::value<uint32_t>(&num_threads)->default_value(diskann::get_num_threads()),
                                        program_options_utils::NUMBER_THREADS_DESCRIPTION);
         optional_configs.add_options()(
             "dynamic", po::value<bool>(&dynamic)->default_value(false),

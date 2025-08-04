@@ -8,9 +8,7 @@
 #include <cstdlib>
 #include <codecvt>
 #include <boost/program_options.hpp>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "parallel_utils.h"
 
 #include <restapi/server.h>
 
@@ -55,9 +53,9 @@ int main(int argc, char *argv[])
                            "Path prefix for loading index file components");
         desc.add_options()("num_nodes_to_cache", po::value<uint32_t>(&num_nodes_to_cache)->default_value(0),
                            "Number of nodes to cache during search");
-        desc.add_options()("num_threads,T", po::value<uint32_t>(&num_threads)->default_value(omp_get_num_procs()),
+        desc.add_options()("num_threads,T", po::value<uint32_t>(&num_threads)->default_value(diskann::get_num_threads()),
                            "Number of threads used for building index (defaults to "
-                           "omp_get_num_procs())");
+                           "hardware_concurrency)");
         desc.add_options()("dist_fn", po::value<std::string>(&dist_fn)->default_value("l2"),
                            "distance function <l2/mips>");
         desc.add_options()("tags_file", po::value<std::string>(&tags_file)->default_value(std::string()),

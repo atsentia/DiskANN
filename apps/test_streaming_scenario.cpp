@@ -3,13 +3,11 @@
 
 #include <index.h>
 #include <numeric>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 #include <string.h>
 #include <time.h>
 #include <timer.h>
 #include <boost/program_options.hpp>
+#include "parallel_utils.h"
 #include <future>
 #include <abstract_index.h>
 #include <index_factory.h>
@@ -372,13 +370,14 @@ int main(int argc, char **argv)
         optional_configs.add_options()("alpha", po::value<float>(&alpha)->default_value(1.2f),
                                        program_options_utils::GRAPH_BUILD_ALPHA);
         optional_configs.add_options()("insert_threads",
-                                       po::value<uint32_t>(&insert_threads)->default_value(omp_get_num_procs() / 2),
+                                       po::value<uint32_t>(&insert_threads)->default_value(diskann::get_num_threads() / 2),
                                        "Number of threads used for inserting into the index (defaults to "
-                                       "omp_get_num_procs()/2)");
+                                       "hardware_concurrency/2)");
         optional_configs.add_options()(
-            "consolidate_threads", po::value<uint32_t>(&consolidate_threads)->default_value(omp_get_num_procs() / 2),
+            "consolidate_threads", 
+            po::value<uint32_t>(&consolidate_threads)->default_value(diskann::get_num_threads() / 2),
             "Number of threads used for consolidating deletes to "
-            "the index (defaults to omp_get_num_procs()/2)");
+            "the index (defaults to hardware_concurrency/2)");
         optional_configs.add_options()("max_points_to_insert",
                                        po::value<uint64_t>(&max_points_to_insert)->default_value(0),
                                        "The number of points from the file that the program streams "

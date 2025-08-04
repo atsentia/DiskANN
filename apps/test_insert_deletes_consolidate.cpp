@@ -3,13 +3,11 @@
 
 #include <index.h>
 #include <numeric>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 #include <string.h>
 #include <time.h>
 #include <timer.h>
 #include <boost/program_options.hpp>
+#include "parallel_utils.h"
 #include <future>
 
 #include "utils.h"
@@ -417,7 +415,7 @@ int main(int argc, char **argv)
         // Optional parameters
         po::options_description optional_configs("Optional");
         optional_configs.add_options()("num_threads,T",
-                                       po::value<uint32_t>(&num_threads)->default_value(omp_get_num_procs()),
+                                       po::value<uint32_t>(&num_threads)->default_value(diskann::get_num_threads()),
                                        program_options_utils::NUMBER_THREADS_DESCRIPTION);
         optional_configs.add_options()("max_degree,R", po::value<uint32_t>(&R)->default_value(64),
                                        program_options_utils::MAX_BUILD_DEGREE);
